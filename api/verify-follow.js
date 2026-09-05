@@ -26,10 +26,16 @@ function getJsonBody(req) {
 
 function validateInput(body) {
   const fileUrl = typeof body.file_url === "string" ? body.file_url.trim() : "";
+  const imageData =
+    typeof body.image_data === "string" ? body.image_data.trim() : "";
   const expectedHandle =
     typeof body.expected_handle === "string" ? body.expected_handle.trim() : "";
 
-  if (!fileUrl || !expectedHandle) return null;
+  if ((!fileUrl && !imageData) || !expectedHandle) return null;
+
+  if (imageData) {
+    return { imageData, expectedHandle };
+  }
 
   const parsedUrl = new URL(fileUrl);
   if (parsedUrl.protocol !== "https:" && parsedUrl.protocol !== "http:") {
@@ -37,6 +43,21 @@ function validateInput(body) {
   }
 
   return { fileUrl: parsedUrl.toString(), expectedHandle };
+}
+
+function validateImageDataUrl(imageData) {
+  const match = /^data:(image\/(?:jpeg|png|gif|webp));base64,([A-Za-z0-9+\/]+={0,2})$/i.exec(
+    imageData,
+  );
+  if (!match) throw new Error("Invalid image data URL");
+
+  const contentType = match[1].toLowerCase();
+  const bytes = Buffer.from(match[2], "base64");
+  if (bytes.length === 0 || bytes.length > MAX_IMAGE_BYTES) {
+    throw new Error("Image is empty or too large");
+  }
+
+  return `data:${contentType};base64,${bytes.toString("base64")}`;
 }
 
 async function fetchImageAsDataUrl(fileUrl) {
@@ -177,9 +198,11 @@ async function handler(req, res) {
     const apiKey = process.env.OPENAI_API;
     if (!apiKey) throw new Error("OPENAI_API is not configured");
 
-    // Fetch temporary Qualtrics URLs server-side so OpenAI does not need direct
-    // access to an authenticated, expiring, or redirecting download URL.
-    const imageDataUrl = await fetchImageAsDataUrl(input.fileUrl);
+    // Qualtrics temporary URLs can require the survey browser session cookie.
+    // Prefer bytes read by that browser; keep file_url for ordinary public URLs.
+    const imageDataUrl = input.imageData
+      ? validateImageDataUrl(input.imageData)
+      : await fetchImageAsDataUrl(input.fileUrl);
     const status = await verifyScreenshot(
       imageDataUrl,
       input.expectedHandle,
@@ -198,6 +221,7 @@ async function handler(req, res) {
 module.exports = handler;
 module.exports._test = {
   fetchImageAsDataUrl,
+  validateImageDataUrl,
   validateInput,
   verifyScreenshot,
 };
