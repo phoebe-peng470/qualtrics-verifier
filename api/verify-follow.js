@@ -1,7 +1,7 @@
 const { sendJson, setCors } = require("./_http");
 
 const OPENAI_URL = "https://api.openai.com/v1/responses";
-const MODEL = "gpt-4.1-mini";
+const MODEL = "gpt-4.1-nano";
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 15_000;
 const ALLOWED_IMAGE_TYPES = new Set([
@@ -225,3 +225,7 @@ module.exports._test = {
   validateInput,
   verifyScreenshot,
 };
+
+
+
+
