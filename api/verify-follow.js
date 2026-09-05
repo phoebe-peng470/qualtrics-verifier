@@ -1,7 +1,7 @@
 const { sendJson, setCors } = require("./_http");
 
 const OPENAI_URL = "https://api.openai.com/v1/responses";
-const MODEL = "gpt-4.1-nano";
+const MODEL = "gpt-4.1-mini";
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 15_000;
 const ALLOWED_IMAGE_TYPES = new Set([
@@ -96,6 +96,11 @@ async function fetchImageAsDataUrl(fileUrl) {
 }
 
 async function verifyScreenshot(imageDataUrl, expectedHandle, apiKey) {
+  console.info("verify-follow OpenAI request started", {
+    model: MODEL,
+    timestamp: new Date().toISOString(),
+  });
+
   const response = await fetch(OPENAI_URL, {
     method: "POST",
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
@@ -147,6 +152,12 @@ async function verifyScreenshot(imageDataUrl, expectedHandle, apiKey) {
     }),
   });
 
+  console.info("verify-follow OpenAI HTTP response received", {
+    model: MODEL,
+    http_status: response.status,
+    ok: response.ok,
+  });
+
   if (!response.ok) {
     throw new Error(`OpenAI request failed with HTTP ${response.status}`);
   }
@@ -167,6 +178,12 @@ async function verifyScreenshot(imageDataUrl, expectedHandle, apiKey) {
   if (!result || !ALLOWED_STATUSES.has(result.status)) {
     throw new Error("OpenAI returned an invalid verification status");
   }
+
+  console.info("verify-follow OpenAI verification completed", {
+    model: MODEL,
+    response_id: payload.id || null,
+    status: result.status,
+  });
 
   return result.status;
 }
