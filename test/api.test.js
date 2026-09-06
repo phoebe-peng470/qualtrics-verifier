@@ -36,7 +36,10 @@ test("verify-follow rejects missing fields", async () => {
   const res = createResponse();
   await verifyFollow({ method: "POST", body: { file_url: "https://example.com/a.png" } }, res);
   assert.equal(res.statusCode, 400);
-  assert.deepEqual(JSON.parse(res.body), { status: "RETRY" });
+  assert.deepEqual(JSON.parse(res.body), {
+    status: "RETRY",
+    reason: "Provide an image and expected handle.",
+  });
 });
 
 test("verify-follow fetches the image and returns structured OpenAI status", async (t) => {
@@ -63,7 +66,10 @@ test("verify-follow fetches the image and returns structured OpenAI status", asy
       output: [
         {
           type: "message",
-          content: [{ type: "output_text", text: '{"status":"PASS"}' }],
+          content: [{
+            type: "output_text",
+            text: '{"status":"PASS","reason":"Expected account is visibly followed."}',
+          }],
         },
       ],
     });
@@ -79,12 +85,16 @@ test("verify-follow fetches the image and returns structured OpenAI status", asy
   }, res);
 
   assert.equal(res.statusCode, 200);
-  assert.deepEqual(JSON.parse(res.body), { status: "PASS" });
+  assert.deepEqual(JSON.parse(res.body), {
+    status: "PASS",
+    reason: "Expected account is visibly followed.",
+  });
   assert.equal(calls[0].url, "https://example.com/screenshot.png");
   assert.equal(calls[1].url, "https://api.openai.com/v1/responses");
   const openAIRequest = JSON.parse(calls[1].options.body);
   assert.match(openAIRequest.input[0].content[1].image_url, /^data:image\/png;base64,/);
   assert.equal(openAIRequest.text.format.strict, true);
+  assert.deepEqual(openAIRequest.text.format.schema.required, ["status", "reason"]);
 });
 
 test("technical image-fetch errors return the required 500 payload", async (t) => {

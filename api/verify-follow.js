@@ -117,6 +117,7 @@ async function verifyScreenshot(imageDataUrl, expectedHandle, apiKey) {
         "Return FAIL when it clearly shows a different account, clearly shows Follow instead of Following, or is clearly irrelevant.",
         "Return RETRY when the screenshot is blurry, cropped, unreadable, ambiguous, or lacks enough visual evidence.",
         "Technical uncertainty in reading the image must be RETRY, never FAIL.",
+        "Give a single, very brief sentence explaining why you assigned this status by stating whether the screenshot shows the expected account and whether the visible follow state is Follow or Following.",
       ].join(" "),
       input: [
         {
@@ -143,8 +144,9 @@ async function verifyScreenshot(imageDataUrl, expectedHandle, apiKey) {
             type: "object",
             properties: {
               status: { type: "string", enum: ["PASS", "FAIL", "RETRY"] },
+              reason: { type: "string", minLength: 1, maxLength: 120 },
             },
-            required: ["status"],
+            required: ["status", "reason"],
             additionalProperties: false,
           },
         },
@@ -175,8 +177,16 @@ async function verifyScreenshot(imageDataUrl, expectedHandle, apiKey) {
   }
 
   const result = JSON.parse(outputText);
-  if (!result || !ALLOWED_STATUSES.has(result.status)) {
-    throw new Error("OpenAI returned an invalid verification status");
+  const reason = typeof result?.reason === "string" ? result.reason.trim() : "";
+  if (
+    !result ||
+    !ALLOWED_STATUSES.has(result.status) ||
+    !reason ||
+    reason.length > 120 ||
+    /[\r\n]/.test(reason) ||
+    (reason.match(/[.!?](?=\s|$)/g) || []).length > 1
+  ) {
+    throw new Error("OpenAI returned an invalid verification result");
   }
 
   console.info("verify-follow OpenAI verification completed", {
@@ -185,7 +195,7 @@ async function verifyScreenshot(imageDataUrl, expectedHandle, apiKey) {
     status: result.status,
   });
 
-  return result.status;
+  return { status: result.status, reason };
 }
 
 async function handler(req, res) {
@@ -197,7 +207,10 @@ async function handler(req, res) {
 
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST, OPTIONS");
-    return sendJson(res, 405, { status: "RETRY" });
+    return sendJson(res, 405, {
+      status: "RETRY",
+      reason: "Use POST to verify a screenshot.",
+    });
   }
 
   let input;
@@ -208,7 +221,10 @@ async function handler(req, res) {
   }
 
   if (!input) {
-    return sendJson(res, 400, { status: "RETRY" });
+    return sendJson(res, 400, {
+      status: "RETRY",
+      reason: "Provide an image and expected handle.",
+    });
   }
 
   try {
@@ -220,12 +236,12 @@ async function handler(req, res) {
     const imageDataUrl = input.imageData
       ? validateImageDataUrl(input.imageData)
       : await fetchImageAsDataUrl(input.fileUrl);
-    const status = await verifyScreenshot(
+    const result = await verifyScreenshot(
       imageDataUrl,
       input.expectedHandle,
       apiKey,
     );
-    return sendJson(res, 200, { status });
+    return sendJson(res, 200, result);
   } catch (error) {
     console.error("verify-follow failed", error);
     return sendJson(res, 500, {
