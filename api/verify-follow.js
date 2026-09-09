@@ -112,11 +112,10 @@ async function verifyScreenshot(imageDataUrl, expectedHandle, apiKey) {
       model: MODEL,
       store: false,
       instructions: [
-        "You verify screenshots of X/Twitter profile pages.",
-        "Return PASS only when the screenshot clearly shows the expected account and a visible Following state.",
-        "Return FAIL when it clearly shows a different account, clearly shows Follow instead of Following, or is clearly irrelevant.",
-        "Return RETRY when the screenshot is blurry, cropped, unreadable, ambiguous, or lacks enough visual evidence.",
-        "Technical uncertainty in reading the image must be RETRY, never FAIL.",
+        "Your task is to verify whether the screenshot of an X/Twitter page shows that the participant is following the expected account.",
+        "Return PASS only when the screenshot clearly shows that they are following the expected account.",
+        "Return FAIL when it shows a different account, shows Follow instead of Following, or is irrelevant.",
+        "Return RETRY when the screenshot lacks sufficient evidence to be verified with confidence, or a technical issue prevents reliable verification.",
         "Give a single, very brief sentence explaining why you assigned this status by stating whether the screenshot shows the expected account and whether the visible follow state is Follow or Following.",
       ].join(" "),
       input: [
@@ -193,6 +192,7 @@ async function verifyScreenshot(imageDataUrl, expectedHandle, apiKey) {
     model: MODEL,
     response_id: payload.id || null,
     status: result.status,
+    reason,
   });
 
   return { status: result.status, reason };
